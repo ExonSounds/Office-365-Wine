@@ -1,0 +1,14 @@
+Sources: shim.c (ole32 shim, ole32-shim/ upstream), uia.c (ms365uia.dll, uia-shim/) and sppc.c
+(sppc/) from github.com/Tombert/office365_flake at commit ef0fd10 (2026-10-15), LGPL-2.1 (LICENSE).
+Built with llvm-mingw 20261020 (github.com/mstorsjo/llvm-mingw), x86_64-w64-mingw32-clang;
+build.sh repeats the build:
+
+  x86_64-w64-mingw32-clang -shared -O2 -Wall -o ole32.dll shim.c ole32.def
+  x86_64-w64-mingw32-clang -shared -O2 -Wall -o ms365uia.dll uia.c -lole32 -luuid
+  x86_64-w64-mingw32-clang -shared -O2 -Wall -o sppc.dll sppc.c
+
+ole32.def forwards every export of GE-Proton11-7's builtin ole32.dll (to combase or kernel32 where
+Wine itself forwards, else to the real ole32, installed as ole32_wine.dll) and lists
+CoRegisterActivationFilter as implemented by shim.c. Regenerate it for another Wine version with
+  build.sh --def PREFIX/runner/<GE-Proton folder>
+(uses winedump), then rebuild.

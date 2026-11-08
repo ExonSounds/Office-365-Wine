@@ -1,0 +1,190 @@
+Windows Registry Editor Version 5.00
+
+; Office's UI font is Segoe UI, which Wine lacks; Selawik is Microsoft's metric-compatible stand-in.
+[HKEY_CURRENT_USER\Software\Wine\Fonts\Replacements]
+"Segoe UI"="Selawik"
+"Segoe UI Semibold"="Selawik Semibold"
+"Segoe UI Semilight"="Selawik Semilight"
+"Segoe UI Light"="Selawik Light"
+"Segoe UI Bold"="Selawik"
+; Document fonts until Office downloads its cloud fonts: metric-compatible Carlito/Caladea
+; (pacman -S ttf-carlito ttf-caladea)
+"Calibri"="Carlito"
+"Cambria"="Caladea"
+
+; Register the UI fonts so DirectWrite sees them too (it lists fonts from this key, GDI also scans
+; Wine's own font folder). Without Tahoma here, Chromium/WebView2 recurses forever in
+; gfx::win::GetSystemFont (the system message font is Tahoma) and Office's sign-in page never opens.
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Fonts]
+"Tahoma (TrueType)"="tahoma.ttf"
+"Tahoma Bold (TrueType)"="tahomabd.ttf"
+"Selawik (TrueType)"="selawk.ttf"
+"Selawik Bold (TrueType)"="selawkb.ttf"
+"Selawik Light (TrueType)"="selawkl.ttf"
+"Selawik Semibold (TrueType)"="selawksb.ttf"
+"Selawik Semilight (TrueType)"="selawksl.ttf"
+
+; PowerShell 7 / .NET apps: Wine's ICU lacks symbols .NET wants (u_charsToUChars), so run .NET in
+; globalization-invariant mode.
+[HKEY_CURRENT_USER\Environment]
+"DOTNET_SYSTEM_GLOBALIZATION_INVARIANT"="1"
+
+; Native Microsoft VC++ runtime, Office's own RichEdit, the office365_flake shims (sppc, ole32),
+; Wine 11.16 d2d1. DXVK's d3d11/dxgi overrides are set by winetricks.
+[HKEY_CURRENT_USER\Software\Wine\DllOverrides]
+"concrt140"="native,builtin"
+"msvcp140"="native,builtin"
+"msvcp140_1"="native,builtin"
+"msvcp140_2"="native,builtin"
+"msvcp140_atomic_wait"="native,builtin"
+"msvcp140_codecvt_ids"="native,builtin"
+"vcamp140"="native,builtin"
+"vcomp140"="native,builtin"
+"vccorlib140"="native,builtin"
+"vcruntime140"="native,builtin"
+"vcruntime140_1"="native,builtin"
+"vcruntime140_threads"="native,builtin"
+"riched20"="native,builtin"
+"sppc"="native"
+"ole32"="native,builtin"
+"combase"=-
+"d2d1"="native"
+"*d3d8"="native"
+"*d3d9"="native"
+"*d3d10core"="native"
+"*d3d11"="native"
+"*dxgi"="native"
+"appxdeploymentclient"=""
+; menu/file-association entries come from wine-office-fixes/install-menu-entries.sh instead
+"winemenubuilder.exe"=""
+"hvsimanagementapi"=""
+
+; appxdeploymentclient (WinRT PackageManager) is a Wine stub that Click-to-Run dereferences as NULL
+; while staging MSIX add-ons, hvsimanagementapi a stub it turns into a fatal error; with both
+; disabled it logs an error and moves on. Office's bootstrappers (OfficeSetup.exe from office.com,
+; the Deployment Tool's setup.exe) however ask PackageManager whether Office came from the Store
+; and abort when the class can't be created at all, so they keep Wine's stub.
+[HKEY_CURRENT_USER\Software\Wine\AppDefaults\OfficeSetup.exe\DllOverrides]
+"appxdeploymentclient"="builtin"
+
+[HKEY_CURRENT_USER\Software\Wine\AppDefaults\setup.exe\DllOverrides]
+"appxdeploymentclient"="builtin"
+
+; Office's sign-in page uses WebView2. In Windows 7 mode (as winetricks sets it) Chromium does not
+; try DirectComposition, which Wine only stubs; otherwise its GPU process crash-loops and the
+; sign-in window stays blank.
+[HKEY_CURRENT_USER\Software\Wine\AppDefaults\msedgewebview2.exe]
+"Version"="win7"
+
+; The WebView2 Fixed Version 152 runtime that install.sh unpacks (the version this setup was tested
+; with), used for every program through this policy.
+[HKEY_CURRENT_USER\Software\Policies\Microsoft\Edge\WebView2\BrowserExecutableFolder]
+"*"="C:\\Program Files\\WebView2Fixed\\Microsoft.WebView2.FixedVersionRuntime.152.0.4191.62.x64"
+
+; Load the shim into every process (Excel never touches ole32); its DllMain keeps the second instance passive.
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Windows NT\CurrentVersion\Windows]
+"AppInit_DLLs"="ms365shim.dll"
+"LoadAppInit_DLLs"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SoftwareProtectionPlatform]
+"Version"="10.0.19041.1"
+
+; CLSID_CUIAutomationRegistrar and CLSID_InkDisp, served by ms365uia.dll.
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{6E29FABF-9977-42D1-8D0E-CA7E61AD87E6}]
+@="ms365 UIAutomationRegistrar"
+
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{6E29FABF-9977-42D1-8D0E-CA7E61AD87E6}\InprocServer32]
+@="C:\\windows\\system32\\ms365uia.dll"
+"ThreadingModel"="Both"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CLSID\{6E29FABF-9977-42D1-8D0E-CA7E61AD87E6}]
+@="ms365 UIAutomationRegistrar"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CLSID\{6E29FABF-9977-42D1-8D0E-CA7E61AD87E6}\InprocServer32]
+@="C:\\windows\\system32\\ms365uia.dll"
+"ThreadingModel"="Both"
+
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{937C1A34-151D-4610-9CA6-A8CC9BDB5D83}]
+@="ms365 InkDisp"
+
+[HKEY_CURRENT_USER\Software\Classes\CLSID\{937C1A34-151D-4610-9CA6-A8CC9BDB5D83}\InprocServer32]
+@="C:\\windows\\system32\\ms365uia.dll"
+"ThreadingModel"="Both"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CLSID\{937C1A34-151D-4610-9CA6-A8CC9BDB5D83}]
+@="ms365 InkDisp"
+
+[HKEY_LOCAL_MACHINE\Software\Classes\CLSID\{937C1A34-151D-4610-9CA6-A8CC9BDB5D83}\InprocServer32]
+@="C:\\windows\\system32\\ms365uia.dll"
+"ThreadingModel"="Both"
+
+; Windows.Web.Http stand-ins served by the shim.
+[HKEY_LOCAL_MACHINE\Software\Microsoft\WindowsRuntime\ActivatableClassId\Windows.Web.Http.Filters.HttpBaseProtocolFilter]
+"DllPath"="C:\\windows\\system32\\ms365shim.dll"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\WindowsRuntime\ActivatableClassId\Windows.Web.Http.HttpClient]
+"DllPath"="C:\\windows\\system32\\ms365shim.dll"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\WindowsRuntime\ActivatableClassId\Windows.Web.Http.HttpMethod]
+"DllPath"="C:\\windows\\system32\\ms365shim.dll"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\WindowsRuntime\ActivatableClassId\Windows.Web.Http.HttpRequestMessage]
+"DllPath"="C:\\windows\\system32\\ms365shim.dll"
+
+; Sign-in without the Windows Web Account Manager (Wine lacks it): browser/WebView2-based flow.
+[HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Common\Identity]
+"EnableADAL"=dword:00000001
+"DisableADALatopWAMOverride"=dword:00000001
+"DisableAADWAM"=dword:00000001
+"DisableMSAWAM"=dword:00000001
+"DisableOneAuth"=dword:00000000
+
+[HKEY_CURRENT_USER\Software\Policies\Microsoft\Office\16.0\Common\Identity]
+"EnableADAL"=dword:00000001
+"DisableADALatopWAMOverride"=dword:00000001
+"DisableAADWAM"=dword:00000001
+"DisableMSAWAM"=dword:00000001
+
+[HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Office\16.0\Common\Identity]
+"EnableADAL"=dword:00000001
+"DisableADALatopWAMOverride"=dword:00000001
+"DisableAADWAM"=dword:00000001
+"DisableMSAWAM"=dword:00000001
+
+[HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Common\ExperimentConfigs\ExternalFeatureOverrides\word]
+"Microsoft.Office.Identity.TestGate.DisableBrokerForOneAuth"="true"
+"Microsoft.Office.Identity.FG.IsWebView2ForOneAuthEnabled"="true"
+
+[HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Common\ExperimentConfigs\ExternalFeatureOverrides\excel]
+"Microsoft.Office.Identity.TestGate.DisableBrokerForOneAuth"="true"
+"Microsoft.Office.Identity.FG.IsWebView2ForOneAuthEnabled"="true"
+
+[HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Common\ExperimentConfigs\ExternalFeatureOverrides\powerpoint]
+"Microsoft.Office.Identity.TestGate.DisableBrokerForOneAuth"="true"
+"Microsoft.Office.Identity.FG.IsWebView2ForOneAuthEnabled"="true"
+
+[HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Common\ExperimentConfigs\ExternalFeatureOverrides\onenote]
+"Microsoft.Office.Identity.TestGate.DisableBrokerForOneAuth"="true"
+"Microsoft.Office.Identity.FG.IsWebView2ForOneAuthEnabled"="true"
+
+[HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Common\ExperimentConfigs\ExternalFeatureOverrides\outlook]
+"Microsoft.Office.Identity.TestGate.DisableBrokerForOneAuth"="true"
+"Microsoft.Office.Identity.FG.IsWebView2ForOneAuthEnabled"="true"
+
+; Token ("vNext") licensing (HKCU\...\Common\Licensing\LicensingNext, <product>=2) skips the
+; Software Protection Platform checks Wine can't satisfy; Office licenses itself from the signed-in
+; Microsoft account instead. apply-fixes.sh sets it for each installed product (ProductReleaseIds).
+; A personal subscription makes Click-to-Run try to switch the product's SKU, which can't complete
+; under Wine; block that.
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Office\ClickToRun\Configuration]
+"SharedComputerLicensing"="0"
+
+[HKEY_LOCAL_MACHINE\Software\Microsoft\Office\ClickToRun\Updates]
+"UpdatesSkuToSkuBlocked"="1"
+
+[HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Common\General]
+"PreferCloudSaveLocations"=dword:00000000
+
+; Hardware rendering through DXVK (GE-Proton's Wine supports the shared textures Office uses).
+[HKEY_CURRENT_USER\Software\Microsoft\Office\16.0\Common\Graphics]
+"DisableHardwareAcceleration"=-

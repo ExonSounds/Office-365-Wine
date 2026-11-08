@@ -1,0 +1,8 @@
+#!/bin/bash
+# Interactive PowerShell 7 in the Office prefix (GE-Proton's Wine). Extra arguments go to PowerShell,
+# e.g.  powershell -File 'Z:\home\you\script.ps1'
+# -ExecutionPolicy Bypass: with signature checks on, loading modules (PSReadLine at the prompt)
+# crashes in Wine's code-signature lookup (FileSignatureInfo.GetSignatureInfo).
+. "$(dirname "$(readlink -f "$0")")/env.sh"
+cd "$HOME"
+exec wine powershell -ExecutionPolicy Bypass "$@"

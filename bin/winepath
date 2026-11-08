@@ -1,0 +1,3 @@
+#!/bin/sh
+# GE-Proton ships no winepath wrapper; use its winepath.exe so the system Wine is never started.
+exec wine winepath.exe "$@"

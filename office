@@ -1,0 +1,59 @@
+#!/bin/bash
+# Start a Microsoft 365 app from this prefix with GE-Proton's Wine.
+#   office word|excel|powerpoint|onenote|outlook|access|publisher [file]
+# (Word, Excel and PowerPoint are tested; the others are passed through as they are.)
+set -euo pipefail
+. "$(dirname "$(readlink -f "$0")")/env.sh"
+OFFICE16='C:\Program Files\Microsoft Office\root\Office16'
+
+case "${1:-}" in
+    word)       exe=WINWORD.EXE;   app=Word;       args=(/q) ;;  # /q: the splash screen hangs under Wine
+    excel)      exe=EXCEL.EXE;     app=Excel;      args=() ;;
+    powerpoint) exe=POWERPNT.EXE;  app=PowerPoint; args=() ;;
+    onenote)    exe=ONENOTE.EXE;   app=OneNote;    args=() ;;
+    outlook)    exe=OUTLOOK.EXE;   app=Outlook;    args=() ;;
+    access)     exe=MSACCESS.EXE;  app=Access;     args=() ;;
+    publisher)  exe=MSPUB.EXE;     app=Publisher;  args=() ;;
+    *) echo "usage: $(basename "$0") word|excel|powerpoint|onenote|outlook|access|publisher [file]" >&2; exit 2 ;;
+esac
+shift
+[ -f "$WINEPREFIX/drive_c/Program Files/Microsoft Office/root/Office16/$exe" ] ||
+    { echo "$(basename "$0"): $app ($exe) is not installed in $WINEPREFIX" >&2; exit 1; }
+
+# Office resets this lock file's ACL on every start; Wine maps that to Unix mode 000, and the
+# next start then fails with "access denied" (Click-to-Run error 5).
+locker="$WINEPREFIX/drive_c/ProgramData/Microsoft/Office/ClickToRunPackageLocker"
+[ -e "$locker" ] && chmod 644 "$locker"
+
+# A Wine prefix update (for instance after the system Wine ran on this prefix) puts Wine's own
+# ole32.dll back over the shim, and Office crashes at start. Re-apply the fixes when that has
+# happened or is pending (.update-timestamp no longer matches GE-Proton's wine.inf).
+stamp="$(cat "$WINEPREFIX/.update-timestamp" 2>/dev/null)"
+if { [ "$stamp" != disable ] && [ "$stamp" != "$(stat -c %Y "$GE_PROTON/share/wine/wine.inf")" ]; } ||
+   ! cmp -s "$OFFICE_FIXES/shim/ole32.dll" "$WINEPREFIX/drive_c/windows/system32/ole32.dll"; then
+    echo "$(basename "$0"): the prefix was updated by Wine; re-applying the Office fixes" >&2
+    "$OFFICE_FIXES/apply-fixes.sh" >/dev/null
+fi
+
+# Wine re-registers its builtin uiautomationcore.dll for CLSID_CUIAutomationRegistrar whenever the
+# prefix is updated, and Excel crashes on the NULL it gets back as soon as a workbook has focus.
+# Re-apply our registrations (ms365uia.dll) when that has happened.
+if ! grep -i -A3 -F '[Software\\Classes\\CLSID\\{6E29FABF-9977-42D1-8D0E-CA7E61AD87E6}\\InprocServer32]' \
+        "$WINEPREFIX/system.reg" | grep -qi 'ms365uia'; then
+    wine regedit /S "Z:${OFFICE_FIXES//\//\\}\\office-wine.reg"
+fi
+
+# Skip the "start in safe mode?" prompt after an unclean exit.
+wine reg delete "HKCU\\Software\\Microsoft\\Office\\16.0\\$app\\Resiliency" /f >/dev/null 2>&1 || true
+
+# Open a file given as a Unix path.
+if [ $# -gt 0 ]; then
+    if [ -e "$1" ]; then
+        f="$(readlink -f "$1")"
+        args+=("Z:${f//\//\\}")
+    else
+        args+=("$1")
+    fi
+fi
+
+exec wine "$OFFICE16\\$exe" "${args[@]}"
