@@ -1,0 +1,9 @@
+! X resources for this prefix's Wine only: env.sh points XENVIRONMENT here, which overrides the
+! desktop's resources (xrdb) for these programs.
+!
+! Grayscale instead of subpixel (LCD) font antialiasing. With Xft.rgba: rgb (KDE Plasma's default)
+! Wine renders text in LCD mode, and GE-Proton11-7's freetype_get_glyph_outline dereferences a NULL
+! bitmap for the very wide glyphs of Office's font-preview font (the font list in the ribbon). Wine
+! catches the access violation but leaves win32u's font lock held, and Word freezes at its next
+! font call.
+Xft.rgba: none

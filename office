@@ -28,7 +28,9 @@ locker="$WINEPREFIX/drive_c/ProgramData/Microsoft/Office/ClickToRunPackageLocker
 # A Wine prefix update (for instance after the system Wine ran on this prefix) puts Wine's own
 # ole32.dll back over the shim, and Office crashes at start. Re-apply the fixes when that has
 # happened or is pending (.update-timestamp no longer matches GE-Proton's wine.inf).
-stamp="$(cat "$WINEPREFIX/.update-timestamp" 2>/dev/null)"
+# (Wine writes the stamp with a CRLF line ending: strip it, or this never matches and every start
+# re-runs apply-fixes.sh with a full wineboot -u.)
+stamp="$(tr -d '\r\n' < "$WINEPREFIX/.update-timestamp" 2>/dev/null || true)"
 if { [ "$stamp" != disable ] && [ "$stamp" != "$(stat -c %Y "$GE_PROTON/share/wine/wine.inf")" ]; } ||
    ! cmp -s "$OFFICE_FIXES/shim/ole32.dll" "$WINEPREFIX/drive_c/windows/system32/ole32.dll"; then
     echo "$(basename "$0"): the prefix was updated by Wine; re-applying the Office fixes" >&2

@@ -15,6 +15,17 @@ OFFICE16="$DRIVE_C/Program Files/Microsoft Office/root/Office16"
 [ -f "$WINEPREFIX/system.reg" ] || { echo "apply-fixes.sh: $WINEPREFIX is not a Wine prefix yet (run install.sh)" >&2; exit 1; }
 
 winpath() { local p; p="$(readlink -f "$1")"; printf 'Z:%s' "${p//\//\\}"; }  # GE-Proton has no winepath
+# Is a 32-bit libfreetype.so.6 installed? (ldconfig lists 32-bit libraries as "(libc6)"; true when
+# there is no ldconfig to ask)
+freetype32_present() {
+    local lc
+    for lc in ldconfig /sbin/ldconfig /usr/sbin/ldconfig; do
+        command -v "$lc" >/dev/null || continue
+        [ "$("$lc" -p 2>/dev/null | grep -c 'libfreetype\.so\.6 (libc6)')" -gt 0 ]  # -c: no SIGPIPE under pipefail
+        return
+    done
+    return 0
+}
 
 # Never let this run's Wine sessions write Linux menu entries for Windows programs.
 export WINEDLLOVERRIDES="winemenubuilder.exe=d"
@@ -24,6 +35,22 @@ export WINEDLLOVERRIDES="winemenubuilder.exe=d"
 wineserver -k 2>/dev/null || true
 wine wineboot -u >/dev/null 2>&1 || true
 wineserver -w
+
+# GE-Proton's Wine still runs some programs as 32-bit processes. Without a 32-bit FreeType they
+# compute the window metrics from no font at all and store garbage in the prefix (below).
+if ! freetype32_present; then
+    echo "apply-fixes.sh: warning: no 32-bit FreeType library found; Wine may write corrupt window metrics (install lib32-freetype2, libfreetype6:i386 or freetype.i686)" >&2
+fi
+# Window metrics written while the prefix had no 32-bit FreeType: CaptionHeight 5434094,
+# MenuHeight 10867998 and the like make every window millions of pixels tall, so it stays
+# invisible (or a blank white box). Delete such values; Wine writes its defaults again.
+for v in $(awk '/^\[Control Panel\\\\Desktop\\\\WindowMetrics\]/ { f = 1; next }
+                /^\[/ { f = 0 }
+                f && /^"[A-Za-z]+"="[0-9]+"$/ { split($0, a, "\""); if (a[4] + 0 > 1000) print a[2] }' \
+           "$WINEPREFIX/user.reg"); do
+    echo "apply-fixes.sh: resetting the corrupt window metric $v" >&2
+    wine reg delete 'HKCU\Control Panel\Desktop\WindowMetrics' /v "$v" /f >/dev/null 2>&1 || true
+done
 
 # Copy a Wine builtin under another name with its "Wine builtin DLL" marker blanked, so Wine
 # loads the file itself as a native DLL.

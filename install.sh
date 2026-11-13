@@ -19,8 +19,8 @@
 #                    archives (~950 MB) from ~/.cache/office-365-wine
 #
 # Needs: curl, tar, sha256sum, sha512sum, cabextract, python3, winetricks, a
-# Vulkan driver (Office draws through DXVK), a graphical session, internet
-# access, ~15 GB free disk. Takes 25-90 minutes, mostly Office's own download.
+# 32-bit FreeType library (Arch: lib32-freetype2), a Vulkan driver (Office
+# draws through DXVK), a graphical session, internet access, ~15 GB free disk. Takes 25-90 minutes, mostly Office's own download.
 # Safe to re-run: finished steps are skipped, so it also repairs an install.
 # Everything is logged to PREFIX/install-logs/.
 #
@@ -148,12 +148,23 @@ done
 [ ${#missing[@]} -eq 0 ] ||
     die "missing programs: ${missing[*]} (e.g. Arch: pacman -S curl cabextract python winetricks; Debian/Ubuntu: apt install curl cabextract python3 winetricks)"
 python3 -c 'import sys; sys.exit(sys.version_info < (3, 6))' || die "python3 >= 3.6 needed"
+# GE-Proton's Wine still runs some programs as 32-bit processes. Without a 32-bit FreeType they
+# compute the prefix's window metrics from no font at all (title bars millions of pixels tall),
+# and every Office window stays invisible. Distribution Wine packages built as pure WoW64 (Arch's
+# wine since 11) no longer pull this library in. ldconfig lists 32-bit libraries as "(libc6)".
+for lc in ldconfig /sbin/ldconfig /usr/sbin/ldconfig; do
+    command -v "$lc" >/dev/null || continue
+    [ "$("$lc" -p 2>/dev/null | grep -c 'libfreetype\.so\.6 (libc6)')" -gt 0 ] ||
+        die "no 32-bit FreeType library: GE-Proton's 32-bit Wine processes would write corrupt window metrics into the prefix and Office's windows would stay invisible (Arch: pacman -S lib32-freetype2, from [multilib]; Debian/Ubuntu: dpkg --add-architecture i386 && apt install libfreetype6:i386; Fedora: dnf install freetype.i686)"
+    break
+done
 [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] ||
     die "no graphical session (DISPLAY and WAYLAND_DISPLAY are unset): Office's installer and apps need one"
 if command -v vulkaninfo >/dev/null; then
     vulkaninfo --summary 2>/dev/null | grep -q deviceName ||
         warn "vulkaninfo finds no Vulkan device; Office draws through DXVK (Vulkan) and stays blank without one"
-elif ! ls /usr/share/vulkan/icd.d/*.json /etc/vulkan/icd.d/*.json >/dev/null 2>&1; then
+# (each folder on its own: one of them is usually missing, which would fail a single ls of both)
+elif ! compgen -G '/usr/share/vulkan/icd.d/*.json' >/dev/null && ! compgen -G '/etc/vulkan/icd.d/*.json' >/dev/null; then
     warn "no Vulkan driver found; Office draws through DXVK (Vulkan) and stays blank without one"
 fi
 free_kb="$(df -Pk "$WINEPREFIX" | awk 'NR == 2 { print $4 }')"

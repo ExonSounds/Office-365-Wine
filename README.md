@@ -12,6 +12,9 @@ Microsoft 365 Education account (product `O365EduCloudRetail`, Office
 connection; Word, Excel and PowerPoint then start, render and show Microsoft's
 sign-in page. On the install these scripts were made from, signing in
 activated Office and Word, Excel and PowerPoint open and edit documents.
+Also in use on a second Arch machine (KDE Plasma 6 Wayland, AMD integrated GPU
+driving the display plus an NVIDIA GPU, Arch's WoW64 `wine` installed,
+`O365ProPlusRetail`): Word signs in, activates and edits documents there.
 
 ![Word started from a fresh install, with the Microsoft sign-in page](docs/word-sign-in.png)
 
@@ -26,9 +29,18 @@ that has your Microsoft 365 subscription on first start.
 
 ## Install
 
-Needs `curl`, `tar`, `cabextract`, `python3`, `winetricks`, a working Vulkan
-driver (Office draws through DXVK), a graphical session, internet access, about
-15 GB of disk and 25–90 minutes, mostly Office's own download.
+Needs `curl`, `tar`, `cabextract`, `python3`, `winetricks`, a 32-bit FreeType
+library, a working Vulkan driver (Office draws through DXVK), a graphical
+session, internet access, about 15 GB of disk and 25–90 minutes, mostly
+Office's own download.
+
+The 32-bit FreeType library is easy to miss: distribution Wine packages built
+as pure WoW64 (Arch's `wine` since 11) no longer pull it in, but GE-Proton's
+Wine still runs some 32-bit programs, and without it the prefix gets corrupt
+window metrics (every Office window invisible). `install.sh` stops when it is
+missing. Arch: `pacman -S lib32-freetype2` (`[multilib]`); Debian/Ubuntu:
+`dpkg --add-architecture i386 && apt install libfreetype6:i386`; Fedora:
+`dnf install freetype.i686`.
 
 1. Download Office's installer from your account: sign in at
    <https://www.office.com>, *Install apps* → *Microsoft 365 apps*. You get
@@ -98,6 +110,20 @@ After an Office update, or when something stops working, run
 GE-Proton runs programs as Windows user `steamuser`: Office's settings are
 under `PREFIX/drive_c/users/steamuser`. Linux files are on drive `Z:`.
 
+### Settings for this machine
+
+`env.sh` also loads `PREFIX/local-env.sh` if it exists; `install.sh` never
+touches that file. Use it for settings that only fit one machine, for instance
+the GPU Office renders on. With several GPUs DXVK takes the first one Vulkan
+reports, often a discrete card while the desktop runs on another; that works,
+but keeps the card busy (a VFIO passthrough VM can't take it while Office
+runs). To render on the GPU driving the display, let Vulkan see only its
+driver (here AMD's RADV):
+
+    # PREFIX/local-env.sh
+    export VK_DRIVER_FILES=/usr/share/vulkan/icd.d/radeon_icd.json
+    export VK_ICD_FILENAMES="$VK_DRIVER_FILES"   # older Vulkan loaders
+
 ## Wine workarounds
 
 | File | Problem it works around |
@@ -116,6 +142,8 @@ under `PREFIX/drive_c/users/steamuser`. Linux files are on drive `Z:`.
 | `root/vfs` symlinks (`apply-fixes.sh`) | Office keeps most DLLs under `root/vfs/<KnownFolder>` and relies on App-V to redirect the real paths there, which is unreliable under Wine; the tree is mirrored into the real folders. |
 | `msi-components.py` (office365_flake) | The integrator's MSI registrations (proofing tools, VBA, add-ins) stay empty under Wine; rebuilt from Click-to-Run's manifests. FM20.DLL is registered for VBA UserForms. |
 | `office` launcher | Re-applies the fixes when a Wine prefix update has put Wine's own `ole32.dll` back over the shim (for instance after the system Wine ran on the prefix: Word would crash at start). Restores `ClickToRunPackageLocker`'s permissions (Office sets an ACL that Wine maps to mode 000, and the next start fails with "access denied"), skips Office's "start in safe mode?" prompt after a crash, starts Word with `/q` (its splash screen hangs), converts Linux paths of documents. |
+| `Xresources` (`XENVIRONMENT` in `env.sh`) | With the desktop's subpixel font antialiasing (`Xft.rgba: rgb`, KDE Plasma's default) Wine renders text in LCD mode, and GE-Proton 11's `freetype_get_glyph_outline` dereferences a NULL bitmap for the very wide glyphs of Office's font-preview font; Wine catches the fault but leaves its font lock held, and Word freezes as soon as the ribbon's font list is scrolled. Wine gets grayscale antialiasing instead; the rest of the desktop keeps its setting. |
+| Window metrics (`apply-fixes.sh`) | A prefix created without a 32-bit FreeType has title-bar and menu heights in the millions of pixels (`HKCU\Control Panel\Desktop\WindowMetrics`): every window is invisible or a blank white box. Such values are deleted, and Wine writes its defaults again. |
 | `bin/winepath`, `wine wineboot` | GE-Proton ships no `winepath` or `wineboot` commands; a bare `winepath`/`wineboot` would start the system Wine on the prefix (winetricks calls `winepath`). The scripts run GE-Proton's `wineboot.exe` through `wine`. |
 
 ## PowerShell (optional)
@@ -143,8 +171,9 @@ running anything; run it in a real terminal.
 - Documents use Calibri/Cambria; until Office downloads its cloud fonts they
   are mapped to Carlito and Caladea if installed (Arch:
   `pacman -S ttf-carlito ttf-caladea`).
-- "Wine cannot find the FreeType font library" from 32-bit helpers is harmless
-  (Arch: `pacman -S lib32-freetype2` silences it).
+- "Wine cannot find the FreeType font library" means the 32-bit FreeType
+  library is missing; it is not harmless (see Install). Install it, then run
+  `apply-fixes.sh` (or `install.sh` again) to repair the prefix.
 - Office's automatic updates may undo workarounds; run `apply-fixes.sh` after
   an update.
 
